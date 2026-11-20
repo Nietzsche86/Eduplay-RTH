@@ -1,0 +1,59 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --font-display: "Plus Jakarta Sans", "Nunito", "Avenir Next", "Segoe UI", system-ui, -apple-system, sans-serif;
+    --font-sans: "DM Sans", "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+    --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  }
+
+  body {
+    font-family: var(--font-sans);
+    background-color: #F4F8F6;
+    color: #0F1F1A;
+    overflow-x: hidden;
+  }
+
+  h1, h2, h3, h4, .font-display {
+    font-family: var(--font-display);
+    text-wrap: balance;
+  }
+}
+
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+.font-mono-num {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Majestic emerald-gold geometric accent surface (100% CSS offline) */
+.bg-emerald-royal {
+  background-color: #064E3B;
+  background-image:
+    radial-gradient(circle at 12% 18%, rgba(251, 191, 36, 0.16) 0%, transparent 42%),
+    radial-gradient(circle at 88% 82%, rgba(16, 185, 129, 0.28) 0%, transparent 48%),
+    linear-gradient(135deg, #022C22 0%, #064E3B 52%, #065F46 100%);
+}
+
+.bg-emerald-subtle-grid {
+  background-image: radial-gradient(rgba(5, 150, 105, 0.08) 1px, transparent 1px);
+  background-size: 22px 22px;
+}
+
+/* Tactile button press feel */
+.btn-tactile {
+  transition: transform 120ms cubic-bezier(0.16, 1, 0.3, 1), box-shadow 120ms ease, background-color 150ms ease;
+}
+.btn-tactile:active:not(:disabled) {
+  transform: translateY(2px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

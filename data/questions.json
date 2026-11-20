@@ -1,0 +1,132 @@
+[
+  {
+    "id": "pack-default-umum-matematika",
+    "title": "Pengetahuan Umum & Matematika Dasar",
+    "subject": "Campuran",
+    "description": "Paket soal bawaan berisi 10 soal pilihan ganda seputar sains, geografi Indonesia, dan berhitung cepat.",
+    "createdAt": "2026-01-10T08:00:00.000Z",
+    "updatedAt": "2026-01-10T08:00:00.000Z",
+    "questions": [
+      {
+        "id": "q-default-1",
+        "text": "Berapakah hasil dari 12 × 8 + 14?",
+        "options": [
+          "98",
+          "110",
+          "108",
+          "112"
+        ],
+        "correctIndex": 1,
+        "difficulty": "Mudah"
+      },
+      {
+        "id": "q-default-2",
+        "text": "Planet manakah yang dikenal sebagai Planet Merah di Tata Surya kita?",
+        "options": [
+          "Venus",
+          "Jupiter",
+          "Mars",
+          "Saturnus"
+        ],
+        "correctIndex": 2,
+        "difficulty": "Mudah"
+      },
+      {
+        "id": "q-default-3",
+        "text": "Gunung tertinggi di Indonesia yang terletak di Papua adalah...",
+        "options": [
+          "Gunung Semeru",
+          "Gunung Rinjani",
+          "Gunung Kerinci",
+          "Puncak Jaya (Carstensz)"
+        ],
+        "correctIndex": 3,
+        "difficulty": "Mudah"
+      },
+      {
+        "id": "q-default-4",
+        "text": "Jika sebuah persegi panjang memiliki panjang 15 cm dan lebar 6 cm, berapakah kelilingnya?",
+        "options": [
+          "42 cm",
+          "90 cm",
+          "21 cm",
+          "36 cm"
+        ],
+        "correctIndex": 0,
+        "difficulty": "Sedang"
+      },
+      {
+        "id": "q-default-5",
+        "text": "Proses pembuatan makanan oleh tumbuhan hijau dengan bantuan cahaya matahari disebut...",
+        "options": [
+          "Respirasi",
+          "Fotosintesis",
+          "Metamorfosis",
+          "Evaporasi"
+        ],
+        "correctIndex": 1,
+        "difficulty": "Mudah"
+      },
+      {
+        "id": "q-default-6",
+        "text": "Berapakah nilai dari √144 + 5²?",
+        "options": [
+          "35",
+          "37",
+          "39",
+          "41"
+        ],
+        "correctIndex": 1,
+        "difficulty": "Sedang"
+      },
+      {
+        "id": "q-default-7",
+        "text": "Siapakah proklamator kemerdekaan Indonesia yang membacakan teks Proklamasi pada 17 Agustus 1945?",
+        "options": [
+          "Ir. Soekarno",
+          "Mohammad Hatta",
+          "Jenderal Soedirman",
+          "Ki Hajar Dewantara"
+        ],
+        "correctIndex": 0,
+        "difficulty": "Mudah"
+      },
+      {
+        "id": "q-default-8",
+        "text": "Unsur kimia dengan lambang 'O' yang sangat dibutuhkan manusia untuk bernapas adalah...",
+        "options": [
+          "Osmium",
+          "Oksigen",
+          "Ozon",
+          "Oganeson"
+        ],
+        "correctIndex": 1,
+        "difficulty": "Mudah"
+      },
+      {
+        "id": "q-default-9",
+        "text": "Sebuah kereta melaju dengan kecepatan rata-rata 80 km/jam. Berapa jarak yang ditempuh dalam 2,5 jam?",
+        "options": [
+          "160 km",
+          "180 km",
+          "200 km",
+          "220 km"
+        ],
+        "correctIndex": 2,
+        "difficulty": "Sedang"
+      },
+      {
+        "id": "q-default-10",
+        "text": "Jika 3x - 7 = 20, maka nilai dari 2x + 5 adalah...",
+        "options": [
+          "19",
+          "21",
+          "23",
+          "25"
+        ],
+        "correctIndex": 2,
+        "difficulty": "Sulit"
+      }
+    ]
+  }
+]
