@@ -45,11 +45,23 @@ interface ImpactBeat {
 }
 
 export function BossRaidPlayer({ socket, roomCode, player, gameState }: PlayerGameProps) {
-  const lastFeedbackIdRef = useRef<number>(0);
+  const lastFeedbackIdRef = useRef<number>(
+    gameState?.playerFeedback?.[player.playerId]?.id || 0
+  );
   const lastUltSeqRef = useRef<number>(0);
+  const impactTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const shakeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [impactBeat, setImpactBeat] = useState<ImpactBeat | null>(null);
   const [phoneShake, setPhoneShake] = useState(false);
   const [myBeamTaps, setMyBeamTaps] = useState(0);
+
+  // Cleanup timers only on component unmount so periodic 1s server ticks never freeze impactBeat!
+  useEffect(() => {
+    return () => {
+      if (impactTimerRef.current) clearTimeout(impactTimerRef.current);
+      if (shakeTimerRef.current) clearTimeout(shakeTimerRef.current);
+    };
+  }, []);
 
   const myHero = useMemo(() => {
     const list: any[] = gameState?.heroes || [];
@@ -97,23 +109,41 @@ export function BossRaidPlayer({ socket, roomCode, player, gameState }: PlayerGa
         lastUltSeqRef.current = evt.seq;
         triggerHaptic([95, 35, 110]);
         setPhoneShake(true);
-        const timer = setTimeout(() => setPhoneShake(false), 520);
-        return () => clearTimeout(timer);
+        if (shakeTimerRef.current) clearTimeout(shakeTimerRef.current);
+        shakeTimerRef.current = setTimeout(() => {
+          setPhoneShake(false);
+          shakeTimerRef.current = null;
+        }, 520);
+        break;
       }
     }
   }, [gameState?.events]);
 
-  // Audio + 1.05s Action Impact Beat + Haptic Feedback on player actions
+  // Audio + Action Impact Beat + Haptic Feedback (keyed strictly by primitive feedback.id!)
+  const feedbackId = feedback?.id ?? 0;
   useEffect(() => {
-    if (!feedback?.id || feedback.id === lastFeedbackIdRef.current) return;
-    lastFeedbackIdRef.current = feedback.id;
+    if (!feedbackId || feedbackId === lastFeedbackIdRef.current || !feedback) return;
+    lastFeedbackIdRef.current = feedbackId;
+
+    const scheduleImpactClear = (ms: number) => {
+      if (impactTimerRef.current) clearTimeout(impactTimerRef.current);
+      impactTimerRef.current = setTimeout(() => {
+        setImpactBeat(null);
+        impactTimerRef.current = null;
+      }, ms);
+    };
 
     if (feedback.kind === 'answer_correct') {
       sound.play('correct');
       triggerHaptic(22);
+      // Immediately clear any lingering impact beat so skill buttons show right away
+      if (impactTimerRef.current) clearTimeout(impactTimerRef.current);
+      setImpactBeat(null);
     } else if (feedback.kind === 'answer_wrong') {
       sound.play('wrong');
       triggerHaptic([45, 30, 45]);
+      if (impactTimerRef.current) clearTimeout(impactTimerRef.current);
+      setImpactBeat(null);
     } else if (feedback.kind === 'skill_attack') {
       sound.play(
         feedback.isCritical
@@ -128,7 +158,7 @@ export function BossRaidPlayer({ socket, roomCode, player, gameState }: PlayerGa
       );
       triggerHaptic(feedback.isCritical ? [35, 25, 75] : [30, 20, 45]);
       setImpactBeat({
-        id: feedback.id,
+        id: feedbackId,
         kind: 'attack',
         label: feedback.isCritical
           ? `CRIT -${feedback.damage || 120}!`
@@ -136,32 +166,29 @@ export function BossRaidPlayer({ socket, roomCode, player, gameState }: PlayerGa
         sublabel: feedback.message,
         isCrit: Boolean(feedback.isCritical),
       });
-      const timer = setTimeout(() => setImpactBeat(null), 1050);
-      return () => clearTimeout(timer);
+      scheduleImpactClear(1000);
     } else if (feedback.kind === 'skill_heal') {
       sound.play('heal');
       triggerHaptic([28, 20, 35]);
       setImpactBeat({
-        id: feedback.id,
+        id: feedbackId,
         kind: 'heal',
         label: `+${feedback.amount || 65} HP!`,
         sublabel: feedback.message,
       });
-      const timer = setTimeout(() => setImpactBeat(null), 950);
-      return () => clearTimeout(timer);
+      scheduleImpactClear(900);
     } else if (feedback.kind === 'skill_shield') {
       sound.play('shield');
       triggerHaptic([28, 20, 35]);
       setImpactBeat({
-        id: feedback.id,
+        id: feedbackId,
         kind: 'shield',
         label: `+${feedback.amount || 45} SHIELD!`,
         sublabel: feedback.message,
       });
-      const timer = setTimeout(() => setImpactBeat(null), 950);
-      return () => clearTimeout(timer);
+      scheduleImpactClear(900);
     }
-  }, [feedback, myHeroClass]);
+  }, [feedbackId, myHeroClass]);
 
   if (!gameState) {
     return (
@@ -283,15 +310,20 @@ export function BossRaidPlayer({ socket, roomCode, player, gameState }: PlayerGa
   }
 
   // ========================================================
-  // 2. VICTORY / DEFEAT CELEBRATION BRIEF SCREEN
+  // 2. VICTORY / DEFEATED DRAMATIC END SCENE
   // ========================================================
   if (gameState.phase === 'victory' || gameState.phase === 'defeat') {
     const isWin = gameState.phase === 'victory';
     return (
-      <div className="flex min-h-[calc(100vh-3.5rem)] items-center justify-center bg-[#09131C] p-4 font-mono-num text-white">
+      <div
+        data-testid={isWin ? 'player-victory-scene' : 'player-defeated-scene'}
+        className="flex min-h-[calc(100vh-3.5rem)] items-center justify-center bg-[#09131C] p-4 font-mono-num text-white"
+      >
         <div
           className={`pixel-panel w-full max-w-md border-4 p-6 text-center ${
-            isWin ? 'border-amber-400 bg-[#0A2B22]' : 'border-rose-500 bg-[#2A0E16]'
+            isWin
+              ? 'border-amber-400 bg-gradient-to-b from-[#0A3A2B] to-[#071D17]'
+              : 'border-rose-500 bg-gradient-to-b from-[#3B0D18] to-[#1A070D]'
           }`}
         >
           <img
@@ -300,19 +332,24 @@ export function BossRaidPlayer({ socket, roomCode, player, gameState }: PlayerGa
             className="pixelated anim-pixel-breathe mx-auto h-24 w-24 object-contain"
           />
           <h1
-            className={`mt-3 text-2xl font-black ${
-              isWin ? 'text-amber-300' : 'text-rose-300'
+            className={`mt-3 text-4xl font-black tracking-widest ${
+              isWin ? 'text-amber-300' : 'text-rose-400'
             }`}
           >
-            {isWin ? 'KEMENANGAN KELAS!' : 'PERTEMPURAN SELESAI!'}
+            {isWin ? 'VICTORY!' : 'DEFEATED'}
           </h1>
-          <p className="mt-1 text-xs text-slate-200">Menuju Podium Juara EduPlay RTH...</p>
+          <p className="mt-1.5 text-sm font-extrabold text-white">
+            {isWin
+              ? `Selamat! ${gameState.bossName} berhasil dikalahkan!`
+              : `Benteng runtuh! ${gameState.bossName} berhasil bertahan.`}
+          </p>
+          <p className="mt-1 text-xs text-slate-300">Menuju Podium Juara EduPlay RTH...</p>
           <div className="mt-4 grid grid-cols-2 gap-2 border-t border-white/15 pt-4 text-sm font-extrabold">
-            <div className="border border-white/15 bg-black/30 p-2">
+            <div className="border border-white/15 bg-black/35 p-2">
               <p className="text-[10px] text-emerald-300">SKOR PRIBADI</p>
               <p className="text-lg text-amber-300">{myHero?.score || 0}</p>
             </div>
-            <div className="border border-white/15 bg-black/30 p-2">
+            <div className="border border-white/15 bg-black/35 p-2">
               <p className="text-[10px] text-emerald-300">BENAR</p>
               <p className="text-lg text-white">{myHero?.correctCount || 0}</p>
             </div>

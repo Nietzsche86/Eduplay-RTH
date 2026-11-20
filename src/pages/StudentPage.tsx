@@ -31,18 +31,63 @@ const AVATAR_CHOICES = [
   '🐝',
 ];
 
+const SESSION_STORAGE_KEY = 'eduplay_rth_student_session_v1';
+
+interface SavedStudentSession {
+  roomCode: string;
+  playerId: string;
+  name: string;
+  avatar: string;
+}
+
+function loadSavedSession(): SavedStudentSession | null {
+  try {
+    const raw = window.sessionStorage.getItem(SESSION_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (parsed?.roomCode && parsed?.playerId && parsed?.name) {
+      return {
+        roomCode: String(parsed.roomCode).toUpperCase(),
+        playerId: String(parsed.playerId),
+        name: String(parsed.name),
+        avatar: String(parsed.avatar || AVATAR_CHOICES[0]),
+      };
+    }
+  } catch {
+    // Ignore storage errors
+  }
+  return null;
+}
+
+function saveStudentSession(session: SavedStudentSession) {
+  try {
+    window.sessionStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(session));
+  } catch {
+    // Ignore storage errors
+  }
+}
+
+function clearStudentSession() {
+  try {
+    window.sessionStorage.removeItem(SESSION_STORAGE_KEY);
+  } catch {
+    // Ignore storage errors
+  }
+}
+
 interface StudentPageProps {
   canAccessHost: boolean;
   onGoHost: () => void;
 }
 
 export function StudentPage({ canAccessHost, onGoHost }: StudentPageProps) {
+  const initialSession = loadSavedSession();
   const [muted, setMuted] = useState(() => sound.isMuted());
-  const [name, setName] = useState('');
-  const [avatar, setAvatar] = useState(AVATAR_CHOICES[0]);
+  const [name, setName] = useState(() => initialSession?.name || '');
+  const [avatar, setAvatar] = useState(() => initialSession?.avatar || AVATAR_CHOICES[0]);
   const [roomCodeInput, setRoomCodeInput] = useState(() => {
     const params = new URLSearchParams(window.location.search);
-    return (params.get('room') || '').toUpperCase().slice(0, 6);
+    return (params.get('room') || initialSession?.roomCode || '').toUpperCase().slice(0, 6);
   });
 
   const [activeRooms, setActiveRooms] = useState<RoomSummary[]>([]);
@@ -52,6 +97,7 @@ export function StudentPage({ canAccessHost, onGoHost }: StudentPageProps) {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [noticeMsg, setNoticeMsg] = useState<string | null>(null);
   const [joining, setJoining] = useState(false);
+  const [reconnecting, setReconnecting] = useState(() => Boolean(initialSession));
 
   const socket = getSocket();
 
@@ -62,6 +108,49 @@ export function StudentPage({ canAccessHost, onGoHost }: StudentPageProps) {
         if (Array.isArray(d.rooms)) setActiveRooms(d.rooms);
       })
       .catch(() => {});
+
+    const attemptAutoResume = () => {
+      const saved = loadSavedSession();
+      if (!saved) {
+        setReconnecting(false);
+        return;
+      }
+      setReconnecting(true);
+      socket.emit(
+        'player:join_room',
+        {
+          roomCode: saved.roomCode,
+          playerId: saved.playerId,
+          name: saved.name,
+          avatar: saved.avatar,
+        },
+        (res: { ok: boolean; error?: string; player?: Player; roomState?: RoomState }) => {
+          setReconnecting(false);
+          if (res?.ok && res.player && res.roomState) {
+            saveStudentSession({
+              roomCode: res.roomState.roomCode,
+              playerId: res.player.playerId,
+              name: res.player.name,
+              avatar: res.player.avatar,
+            });
+            setPlayer(res.player);
+            setRoomState(res.roomState);
+            setGameState(res.roomState.gameState || null);
+            setErrorMsg(null);
+          } else {
+            clearStudentSession();
+          }
+        }
+      );
+    };
+
+    if (socket.connected) {
+      attemptAutoResume();
+    }
+
+    const onConnect = () => {
+      attemptAutoResume();
+    };
 
     const onActiveList = (list: RoomSummary[]) => {
       setActiveRooms(list || []);
@@ -80,6 +169,7 @@ export function StudentPage({ canAccessHost, onGoHost }: StudentPageProps) {
 
     const onKicked = ({ reason }: { reason: string }) => {
       sound.play('wrong');
+      clearStudentSession();
       setRoomState(null);
       setPlayer(null);
       setGameState(null);
@@ -87,12 +177,14 @@ export function StudentPage({ canAccessHost, onGoHost }: StudentPageProps) {
     };
 
     const onClosed = ({ reason }: { reason: string }) => {
+      clearStudentSession();
       setRoomState(null);
       setPlayer(null);
       setGameState(null);
       setNoticeMsg(reason || 'Ruangan telah ditutup oleh guru.');
     };
 
+    socket.on('connect', onConnect);
     socket.on('rooms:active_list', onActiveList);
     socket.on('room:state', onRoomState);
     socket.on('game:state', onGameState);
@@ -100,6 +192,7 @@ export function StudentPage({ canAccessHost, onGoHost }: StudentPageProps) {
     socket.on('room:closed', onClosed);
 
     return () => {
+      socket.off('connect', onConnect);
       socket.off('rooms:active_list', onActiveList);
       socket.off('room:state', onRoomState);
       socket.off('game:state', onGameState);
@@ -132,12 +225,19 @@ export function StudentPage({ canAccessHost, onGoHost }: StudentPageProps) {
     setJoining(true);
     sound.play('click');
 
+    const saved = loadSavedSession();
+    const reusablePlayerId =
+      saved && saved.roomCode === cleanCode && saved.name.toLowerCase() === cleanName.toLowerCase()
+        ? saved.playerId
+        : undefined;
+
     socket.emit(
       'player:join_room',
       {
         roomCode: cleanCode,
         name: cleanName,
         avatar,
+        playerId: reusablePlayerId,
       },
       (res: { ok: boolean; error?: string; player?: Player; roomState?: RoomState }) => {
         setJoining(false);
@@ -147,6 +247,12 @@ export function StudentPage({ canAccessHost, onGoHost }: StudentPageProps) {
           return;
         }
         sound.play('correct');
+        saveStudentSession({
+          roomCode: res.roomState.roomCode,
+          playerId: res.player.playerId,
+          name: res.player.name,
+          avatar: res.player.avatar,
+        });
         setPlayer(res.player);
         setRoomState(res.roomState);
         setGameState(res.roomState.gameState || null);
@@ -161,6 +267,7 @@ export function StudentPage({ canAccessHost, onGoHost }: StudentPageProps) {
 
   const handleLeaveRoom = () => {
     sound.play('click');
+    clearStudentSession();
     if (roomState && player) {
       socket.emit('player:leave_room', {
         roomCode: roomState.roomCode,
@@ -294,8 +401,25 @@ export function StudentPage({ canAccessHost, onGoHost }: StudentPageProps) {
           </div>
         )}
 
-        {/* 4. STUDENT JOIN SCREEN (DEFAULT LANDING) */}
-        {!roomState && (
+        {/* 4. AUTO-RECONNECTING STATE AFTER REFRESH */}
+        {!roomState && reconnecting && (
+          <div className="mx-auto flex min-h-[65vh] max-w-md items-center justify-center px-4">
+            <div className="w-full rounded-3xl border border-emerald-900/15 bg-white p-8 text-center shadow-sm">
+              <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-50 p-2">
+                <SchoolLogo className="h-full w-full" />
+              </div>
+              <p className="font-display text-lg font-black text-emerald-950">
+                Melanjutkan Permainan...
+              </p>
+              <p className="mt-1 text-sm text-slate-500">
+                Menyambungkan kembali ke ruangan kamu secara otomatis.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* 5. STUDENT JOIN SCREEN (DEFAULT LANDING) */}
+        {!roomState && !reconnecting && (
           <div className="mx-auto grid w-full max-w-5xl grid-cols-1 items-start gap-4 px-4 py-4 sm:px-6 lg:grid-cols-12 lg:gap-8 lg:py-10">
             {/* Left Majestic School Crest Hero & Active LAN Rooms */}
             <section className="flex flex-col gap-4 lg:col-span-5">

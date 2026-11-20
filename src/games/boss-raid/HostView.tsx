@@ -922,17 +922,25 @@ export function BossRaidHost({
         }
       }
 
-      // Glowing Shield Barrier Dome
+      // Subtle pixel-art Shield Glints hugging the Castle battlements (no distracting arc line!)
       if (castleShield > 0) {
-        const pulse = 0.28 + 0.16 * Math.sin(t * 6);
+        const shieldAlpha = 0.45 + 0.35 * Math.sin(t * 5);
         ctx2.save();
-        ctx2.strokeStyle = `rgba(56, 189, 248, ${0.75 + pulse * 0.4})`;
-        ctx2.lineWidth = 4;
-        ctx2.fillStyle = `rgba(56, 189, 248, ${pulse * 0.48})`;
-        ctx2.beginPath();
-        ctx2.arc(baseX + 76, GROUND_Y - 56, 122, -Math.PI * 0.48, Math.PI * 0.16);
-        ctx2.stroke();
-        ctx2.fill();
+        ctx2.fillStyle = `rgba(125, 211, 252, ${shieldAlpha})`;
+        // Clean pixel crest trim along fortress top & subtle twinkling ward sparks
+        ctx2.fillRect(baseX, baseY + 34, 114, 3);
+        const sparks = [
+          [baseX + 20, baseY + 52],
+          [baseX + 98, baseY + 58],
+          [baseX + 34, baseY + 114],
+          [baseX + 112, baseY + 124],
+        ];
+        sparks.forEach(([sx, sy], idx) => {
+          const blink = Math.sin(t * 7 + idx * 1.6);
+          if (blink > 0) {
+            ctx2.fillRect(sx, sy, 4, 4);
+          }
+        });
         ctx2.restore();
       }
     }
@@ -2022,7 +2030,7 @@ export function BossRaidHost({
         )}
 
         {/* CLASS-SYNC 2X CALLOUT BANNER (Lv. 3 Epik) */}
-        {activeClassSync && !isCharging && !activeCinematic && (
+        {activeClassSync && !isCharging && !activeCinematic && gameState.phase === 'battle' && (
           <div className="pointer-events-none absolute inset-x-4 top-3 flex justify-center">
             <div className="pixel-panel inline-flex items-center gap-2 border-2 border-amber-300 bg-amber-950/95 px-4 py-1.5 font-mono-num text-xs font-black text-amber-200 sm:text-sm">
               <Sparkles className="h-4 w-4 text-amber-300" />
@@ -2030,6 +2038,51 @@ export function BossRaidHost({
               <span className="border border-amber-300 bg-amber-400 px-1.5 text-slate-950">
                 {activeClassSync.remainingSec}d
               </span>
+            </div>
+          </div>
+        )}
+
+        {/* GRAND END SCENE: VICTORY! OR DEFEATED OVERLAY */}
+        {(gameState.phase === 'victory' || gameState.phase === 'defeat') && (
+          <div
+            data-testid={
+              gameState.phase === 'victory' ? 'host-victory-scene' : 'host-defeated-scene'
+            }
+            className={`pointer-events-none absolute inset-0 flex flex-col items-center justify-center px-6 text-center ${
+              gameState.phase === 'victory' ? 'bg-emerald-950/55' : 'bg-rose-950/65'
+            }`}
+          >
+            <div
+              className={`pixel-panel max-w-2xl border-4 px-10 py-6 ${
+                gameState.phase === 'victory'
+                  ? 'border-amber-300 bg-gradient-to-b from-[#064E3B]/95 to-[#022C22]/95'
+                  : 'border-rose-500 bg-gradient-to-b from-[#4C0519]/95 to-[#1F040C]/95'
+              }`}
+            >
+              <p
+                className={`font-mono-num text-xs font-black tracking-[0.35em] ${
+                  gameState.phase === 'victory' ? 'text-emerald-300' : 'text-rose-300'
+                }`}
+              >
+                {gameState.phase === 'victory' ? '★ PERTEMPURAN SELESAI ★' : '✕ PERTEMPURAN BERAKHIR ✕'}
+              </p>
+              <h2
+                className={`mt-2 font-mono-num text-5xl font-black tracking-[0.14em] sm:text-7xl ${
+                  gameState.phase === 'victory'
+                    ? 'text-amber-300 drop-shadow-[0_5px_0_rgba(2,6,23,0.95)]'
+                    : 'text-rose-400 drop-shadow-[0_5px_0_rgba(2,6,23,0.95)]'
+                }`}
+              >
+                {gameState.phase === 'victory' ? 'VICTORY!' : 'DEFEATED'}
+              </h2>
+              <p className="mt-3 font-mono-num text-sm font-extrabold text-white sm:text-base">
+                {gameState.phase === 'victory'
+                  ? `${gameState.bossName.toUpperCase()} BERHASIL DIKALAHKAN! (+300 SKOR KEMENANGAN)`
+                  : `BENTENG RUNTUH! ${gameState.bossName.toUpperCase()} BERHASIL BERTAHAN.`}
+              </p>
+              <p className="mt-1.5 font-mono-num text-xs font-bold text-amber-200/90">
+                Menyiapkan Podium Juara EduPlay RTH...
+              </p>
             </div>
           </div>
         )}

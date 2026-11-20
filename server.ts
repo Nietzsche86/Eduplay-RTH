@@ -483,10 +483,16 @@ async function startServer() {
         return;
       }
 
-      // Check reconnection for existing playerId
+      // Check reconnection for existing playerId, or disconnected player with same name
       let existing = incomingPlayerId
         ? room.players.find((p) => p.playerId === incomingPlayerId)
         : undefined;
+
+      if (!existing && room.status !== 'lobby') {
+        existing = room.players.find(
+          (p) => !p.connected && p.name.toLowerCase() === name.toLowerCase()
+        );
+      }
 
       if (existing) {
         existing.socketId = socket.id;
@@ -520,6 +526,9 @@ async function startServer() {
 
       socket.join(code);
       io.to(code).emit('room:state', serializeRoom(room));
+      if (room.gameState) {
+        socket.emit('game:state', room.gameState);
+      }
       broadcastActiveRooms();
 
       cb?.({
