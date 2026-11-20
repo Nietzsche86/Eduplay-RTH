@@ -7,6 +7,7 @@ import crypto from 'crypto';
 import { Server as SocketIOServer } from 'socket.io';
 import { questionStore } from './server/storage.js';
 import { getGameHandler } from './server/games/registry.js';
+import { canAccessHostMode } from './server/accessControl.js';
 
 const PORT = Number(process.env.PORT) || 3000;
 const HOST = '0.0.0.0';
@@ -76,6 +77,7 @@ interface RoomRecord {
     questionLimit: number;
     bossMaxHp: number;
     bossType: 'inferno-dragon' | 'titan-golem' | 'dark-overlord';
+    raidLevel: 'santai' | 'standar' | 'epik';
   };
   players: RoomPlayer[];
   results: Array<{
@@ -181,10 +183,27 @@ async function startServer() {
     }
   }
 
+  function isReqAllowedHost(req: express.Request): boolean {
+    return canAccessHostMode({
+      remoteAddress: req.socket?.remoteAddress || req.ip,
+      hostHeader: req.headers.host,
+    });
+  }
+
+  function isSocketAllowedHost(socket: any): boolean {
+    return canAccessHostMode({
+      remoteAddress: socket.handshake?.address || socket.conn?.remoteAddress,
+      hostHeader: socket.handshake?.headers?.host,
+    });
+  }
+
   // ==================== REST API ====================
 
-  app.get('/api/server-info', (_req, res) => {
-    res.json(detectLanInfo());
+  app.get('/api/server-info', (req, res) => {
+    res.json({
+      ...detectLanInfo(),
+      canAccessHost: isReqAllowedHost(req),
+    });
   });
 
   app.get('/api/rooms/active', (_req, res) => {
@@ -201,6 +220,10 @@ async function startServer() {
   });
 
   app.post('/api/packs', (req, res) => {
+    if (!isReqAllowedHost(req)) {
+      res.status(403).json({ error: 'Manajemen Bank Soal hanya dapat diakses dari laptop guru (localhost).' });
+      return;
+    }
     try {
       const pack = questionStore.createPack(req.body);
       res.status(201).json({ pack });
@@ -210,6 +233,10 @@ async function startServer() {
   });
 
   app.put('/api/packs/:id', (req, res) => {
+    if (!isReqAllowedHost(req)) {
+      res.status(403).json({ error: 'Manajemen Bank Soal hanya dapat diakses dari laptop guru (localhost).' });
+      return;
+    }
     try {
       const pack = questionStore.updatePack(req.params.id, req.body);
       res.json({ pack });
@@ -219,6 +246,10 @@ async function startServer() {
   });
 
   app.delete('/api/packs/:id', (req, res) => {
+    if (!isReqAllowedHost(req)) {
+      res.status(403).json({ error: 'Manajemen Bank Soal hanya dapat diakses dari laptop guru (localhost).' });
+      return;
+    }
     try {
       const removed = questionStore.deletePack(req.params.id);
       res.json({ deleted: removed });
@@ -228,6 +259,10 @@ async function startServer() {
   });
 
   app.post('/api/packs/import', (req, res) => {
+    if (!isReqAllowedHost(req)) {
+      res.status(403).json({ error: 'Import Bank Soal hanya dapat diakses dari laptop guru (localhost).' });
+      return;
+    }
     try {
       const imported = questionStore.importPack(req.body);
       res.status(201).json({ packs: imported });
@@ -243,6 +278,10 @@ async function startServer() {
     socket.emit('rooms:active_list', getActiveRoomSummaries());
 
     socket.on('host:create_room', (payload, cb) => {
+      if (!isSocketAllowedHost(socket)) {
+        cb?.({ ok: false, error: 'Mode Guru hanya dapat dibuka dari laptop server (localhost).' });
+        return;
+      }
       try {
         const gameId = String(payload?.gameId || '').trim();
         const gameName = String(payload?.gameName || gameId).trim();
@@ -285,13 +324,16 @@ async function startServer() {
           status: 'lobby',
           settings: {
             timePerQuestion: Math.max(5, Math.min(120, Number(rawSettings.timePerQuestion) || 15)),
-            gameDuration: Math.max(20, Math.min(300, Number(rawSettings.gameDuration) || 90)),
+            gameDuration: Math.max(30, Math.min(300, Number(rawSettings.gameDuration) || 120)),
             shuffleQuestions: Boolean(rawSettings.shuffleQuestions ?? true),
             questionLimit: Math.max(0, Number(rawSettings.questionLimit) || 0),
-            bossMaxHp: Math.max(300, Number(rawSettings.bossMaxHp) || 1000),
+            bossMaxHp: Number(rawSettings.bossMaxHp) === 0 ? 0 : Math.max(300, Number(rawSettings.bossMaxHp) || 0),
             bossType: ['inferno-dragon', 'titan-golem', 'dark-overlord'].includes(rawSettings.bossType)
               ? rawSettings.bossType
               : 'inferno-dragon',
+            raidLevel: ['santai', 'standar', 'epik'].includes(rawSettings.raidLevel)
+              ? rawSettings.raidLevel
+              : 'standar',
           },
           players: [],
           results: [],

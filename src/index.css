@@ -81,6 +81,85 @@
     0 0 0 0 rgba(2, 6, 23, 0.65);
 }
 
+/* Dynamic fluid pixel motion keyframes for Mobile Mini Battle Arena */
+@keyframes pixel-breathe {
+  0%, 100% { transform: translateY(0) scaleY(1) scaleX(1); }
+  50% { transform: translateY(-3px) scaleY(1.04) scaleX(0.97); }
+}
+
+@keyframes pixel-hero-lunge {
+  0% { transform: translateX(0) scale(1, 1); }
+  16% { transform: translateX(-8px) scale(1.18, 0.84); }
+  45% { transform: translateX(88px) scale(1.24, 0.86); }
+  62% { transform: translateX(74px) scale(0.94, 1.12); }
+  100% { transform: translateX(0) scale(1, 1); }
+}
+
+@keyframes pixel-hero-cast {
+  0% { transform: translateY(0) scale(1, 1); }
+  25% { transform: translateY(3px) scale(1.14, 0.88); }
+  55% { transform: translateY(-10px) scale(0.92, 1.15); }
+  100% { transform: translateY(0) scale(1, 1); }
+}
+
+@keyframes pixel-boss-hit {
+  0% { transform: translateX(0) scale(1, 1); filter: brightness(1); }
+  15% { transform: translateX(14px) scale(0.88, 1.14); filter: brightness(3.2) contrast(1.4); }
+  35% { transform: translateX(-8px) scale(1.08, 0.92); filter: brightness(2.2); }
+  60% { transform: translateX(6px) scale(0.96, 1.04); filter: brightness(1.3); }
+  100% { transform: translateX(0) scale(1, 1); filter: brightness(1); }
+}
+
+@keyframes pixel-damage-pop {
+  0% { opacity: 0; transform: translate(-50%, 10px) scale(0.6); }
+  20% { opacity: 1; transform: translate(-50%, -6px) scale(1.22); }
+  75% { opacity: 1; transform: translate(-50%, -22px) scale(1); }
+  100% { opacity: 0; transform: translate(-50%, -34px) scale(0.92); }
+}
+
+@keyframes pixel-phone-shake {
+  0%, 100% { transform: translate3d(0, 0, 0); }
+  15% { transform: translate3d(-7px, 4px, 0); }
+  30% { transform: translate3d(7px, -4px, 0); }
+  45% { transform: translate3d(-6px, -3px, 0); }
+  60% { transform: translate3d(5px, 3px, 0); }
+  75% { transform: translate3d(-3px, 1px, 0); }
+}
+
+@keyframes pixel-slash-burst {
+  0% { opacity: 0; transform: scale(0.4) rotate(-25deg); }
+  25% { opacity: 1; transform: scale(1.15) rotate(8deg); }
+  100% { opacity: 0; transform: scale(1.45) rotate(24deg); }
+}
+
+.anim-pixel-breathe {
+  animation: pixel-breathe 1.7s ease-in-out infinite;
+}
+
+.anim-hero-lunge {
+  animation: pixel-hero-lunge 0.62s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+.anim-hero-cast {
+  animation: pixel-hero-cast 0.55s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+.anim-boss-hit {
+  animation: pixel-boss-hit 0.48s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+.anim-damage-pop {
+  animation: pixel-damage-pop 0.95s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.anim-phone-shake {
+  animation: pixel-phone-shake 0.46s ease-out;
+}
+
+.anim-slash-burst {
+  animation: pixel-slash-burst 0.4s ease-out forwards;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: 0.01ms !important;

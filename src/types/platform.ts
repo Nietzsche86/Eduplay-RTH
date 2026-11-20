@@ -40,14 +40,16 @@ export interface GameResultEntry {
 }
 
 export type BossType = 'inferno-dragon' | 'titan-golem' | 'dark-overlord';
+export type RaidLevel = 'santai' | 'standar' | 'epik';
 
 export interface GameSettings {
   timePerQuestion: number; // seconds (for Quiz Kilat)
   gameDuration: number; // seconds (for Boss Raid)
   shuffleQuestions: boolean;
   questionLimit: number; // 0 = all questions in pack
-  bossMaxHp: number;
+  bossMaxHp: number; // 0 = Auto-Scale Kelas
   bossType?: BossType;
+  raidLevel?: RaidLevel;
 }
 
 export type RoomStatus = 'lobby' | 'playing' | 'finished';
@@ -79,6 +81,7 @@ export interface ServerInfo {
   port: number;
   url: string;
   interfaces: Array<{ name: string; address: string }>;
+  canAccessHost?: boolean;
 }
 
 export interface HostGameProps {
@@ -87,6 +90,8 @@ export interface HostGameProps {
   roomState: RoomState;
   gameState: any;
   onForceEnd: () => void;
+  isFullscreen?: boolean;
+  onToggleFullscreen?: () => void;
 }
 
 export interface PlayerGameProps {

@@ -32,10 +32,11 @@ const AVATAR_CHOICES = [
 ];
 
 interface StudentPageProps {
+  canAccessHost: boolean;
   onGoHost: () => void;
 }
 
-export function StudentPage({ onGoHost }: StudentPageProps) {
+export function StudentPage({ canAccessHost, onGoHost }: StudentPageProps) {
   const [muted, setMuted] = useState(() => sound.isMuted());
   const [name, setName] = useState('');
   const [avatar, setAvatar] = useState(AVATAR_CHOICES[0]);
@@ -195,7 +196,7 @@ export function StudentPage({ onGoHost }: StudentPageProps) {
               {muted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
             </button>
 
-            {!roomState && (
+            {!roomState && canAccessHost && (
               <button
                 type="button"
                 onClick={() => {

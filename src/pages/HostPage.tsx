@@ -2,6 +2,8 @@ import { useCallback, useEffect, useState } from 'react';
 import {
   BookOpen,
   Gamepad2,
+  Maximize2,
+  Minimize2,
   Play,
   Settings2,
   Smartphone,
@@ -37,13 +39,15 @@ export function HostPage({ onGoStudent }: HostPageProps) {
     gameDuration: 120,
     shuffleQuestions: true,
     questionLimit: 0,
-    bossMaxHp: 1200,
+    bossMaxHp: 0, // 0 = Auto-Scale Kelas
     bossType: 'inferno-dragon',
+    raidLevel: 'standar',
   });
 
   const [roomState, setRoomState] = useState<RoomState | null>(null);
   const [gameState, setGameState] = useState<any>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [isFullscreen, setIsFullscreen] = useState(false);
 
   const socket = getSocket();
 
@@ -92,6 +96,52 @@ export function HostPage({ onGoStudent }: HostPageProps) {
       socket.off('game:state', onGameState);
     };
   }, [socket]);
+
+  const toggleFullscreen = useCallback(() => {
+    sound.play('click');
+    setIsFullscreen((prev) => {
+      const next = !prev;
+      if (next) {
+        document.documentElement.requestFullscreen?.().catch(() => {});
+      } else if (document.fullscreenElement) {
+        document.exitFullscreen?.().catch(() => {});
+      }
+      return next;
+    });
+  }, []);
+
+  // Sync browser native fullscreen exits & support F / Esc shortcuts during gameplay
+  useEffect(() => {
+    const onFsChange = () => {
+      if (!document.fullscreenElement) {
+        setIsFullscreen(false);
+      }
+    };
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (roomState?.status !== 'playing') return;
+      if (e.key === 'Escape' && isFullscreen) {
+        setIsFullscreen(false);
+      } else if ((e.key === 'f' || e.key === 'F') && !(e.target instanceof HTMLInputElement)) {
+        toggleFullscreen();
+      }
+    };
+    document.addEventListener('fullscreenchange', onFsChange);
+    window.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('fullscreenchange', onFsChange);
+      window.removeEventListener('keydown', onKeyDown);
+    };
+  }, [roomState?.status, isFullscreen, toggleFullscreen]);
+
+  // Automatically exit Full Mode when match finishes so Podium & CSV controls are cleanly shown
+  useEffect(() => {
+    if (roomState?.status !== 'playing' && isFullscreen) {
+      setIsFullscreen(false);
+      if (document.fullscreenElement) {
+        document.exitFullscreen?.().catch(() => {});
+      }
+    }
+  }, [roomState?.status, isFullscreen]);
 
   const selectedGame = getGameById(selectedGameId);
   const selectedPack = packs.find((p) => p.id === selectedPackId) ?? null;
@@ -181,99 +231,146 @@ export function HostPage({ onGoStudent }: HostPageProps) {
   };
 
   const activeRoomGame = roomState ? getGameById(roomState.gameId) : undefined;
+  const isPlaying = roomState?.status === 'playing';
+  const isPlayingFullView = Boolean(isPlaying && isFullscreen);
+  const isLockedStageGame = Boolean(isPlaying && activeRoomGame?.id === 'boss-raid');
 
   return (
-    <div className="min-h-screen bg-[#F4F8F6] bg-emerald-subtle-grid text-slate-900">
-      {/* Clean 3-Zone Top Bar */}
-      <header className="sticky top-0 z-30 border-b border-emerald-900/10 bg-white">
-        <div className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-8 px-4 sm:px-6 lg:px-8">
-          {/* Zone 1: Single-line Brand Wordmark */}
-          <button
-            type="button"
-            onClick={() => {
-              if (!roomState) setActiveTab('setup');
-            }}
-            className="flex items-center gap-3 whitespace-nowrap shrink-0 text-left"
-          >
-            <SchoolLogo className="h-10 w-10" />
-            <span className="font-display text-lg font-black tracking-tight text-emerald-950">
-              EduPlay RTH
-            </span>
-          </button>
-
-          {/* Zone 2: Concise Nav Links (hidden during active room to keep projector focused) */}
-          {!roomState ? (
-            <nav aria-label="Navigasi Guru" className="flex items-center gap-2 sm:gap-6">
-              <button
-                type="button"
-                onClick={() => {
-                  sound.play('click');
-                  setActiveTab('setup');
-                }}
-                className={`inline-flex items-center gap-1.5 border-b-2 px-2 py-1 text-sm font-bold transition-colors whitespace-nowrap shrink-0 ${
-                  activeTab === 'setup'
-                    ? 'border-emerald-600 text-emerald-800'
-                    : 'border-transparent text-slate-600 hover:text-emerald-900'
-                }`}
-              >
-                <Gamepad2 className="h-4 w-4" />
-                <span>Pilih Game</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  sound.play('click');
-                  setActiveTab('bank');
-                }}
-                className={`inline-flex items-center gap-1.5 border-b-2 px-2 py-1 text-sm font-bold transition-colors whitespace-nowrap shrink-0 ${
-                  activeTab === 'bank'
-                    ? 'border-emerald-600 text-emerald-800'
-                    : 'border-transparent text-slate-600 hover:text-emerald-900'
-                }`}
-              >
-                <BookOpen className="h-4 w-4" />
-                <span>Bank Soal</span>
-              </button>
-            </nav>
-          ) : (
-            <div className="hidden text-sm font-semibold text-slate-500 md:block">
-              Ruang{' '}
-              <span className="font-mono-num font-bold text-emerald-900">{roomState.roomCode}</span>
-              {' · '}
-              <span>{serverInfo?.url || window.location.origin}</span>
-            </div>
-          )}
-
-          {/* Zone 3: Sound & Mode Siswa Action */}
-          <div className="flex items-center gap-2.5 shrink-0">
+    <div
+      className={
+        isPlayingFullView
+          ? 'fixed inset-0 z-50 flex h-screen w-screen flex-col overflow-hidden bg-[#060E16] text-white'
+          : isLockedStageGame
+            ? 'flex h-screen w-screen flex-col overflow-hidden bg-[#060E16] text-white'
+            : 'min-h-screen bg-[#F4F8F6] bg-emerald-subtle-grid text-slate-900'
+      }
+    >
+      {/* Clean 3-Zone Top Bar (automatically hidden in Full Mode so 100% viewport is game stage) */}
+      {!isPlayingFullView && (
+        <header className="sticky top-0 z-30 shrink-0 border-b border-emerald-900/10 bg-white text-slate-900">
+          <div className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-8 px-4 sm:px-6 lg:px-8">
+            {/* Zone 1: Single-line Brand Wordmark */}
             <button
               type="button"
-              onClick={() => setMuted(sound.toggleMute())}
-              aria-label={muted ? 'Aktifkan efek suara' : 'Bisukan efek suara'}
-              className="flex h-10 w-10 items-center justify-center rounded-xl border border-emerald-900/10 bg-white text-slate-600 hover:bg-emerald-50 hover:text-emerald-800"
+              onClick={() => {
+                if (!roomState) setActiveTab('setup');
+              }}
+              className="flex items-center gap-3 whitespace-nowrap shrink-0 text-left"
             >
-              {muted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
+              <SchoolLogo className="h-10 w-10" />
+              <span className="font-display text-lg font-black tracking-tight text-emerald-950">
+                EduPlay RTH
+              </span>
             </button>
 
-            {!roomState && (
+            {/* Zone 2: Concise Nav Links (hidden during active room to keep projector focused) */}
+            {!roomState ? (
+              <nav aria-label="Navigasi Guru" className="flex items-center gap-2 sm:gap-6">
+                <button
+                  type="button"
+                  onClick={() => {
+                    sound.play('click');
+                    setActiveTab('setup');
+                  }}
+                  className={`inline-flex items-center gap-1.5 border-b-2 px-2 py-1 text-sm font-bold transition-colors whitespace-nowrap shrink-0 ${
+                    activeTab === 'setup'
+                      ? 'border-emerald-600 text-emerald-800'
+                      : 'border-transparent text-slate-600 hover:text-emerald-900'
+                  }`}
+                >
+                  <Gamepad2 className="h-4 w-4" />
+                  <span>Pilih Game</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    sound.play('click');
+                    setActiveTab('bank');
+                  }}
+                  className={`inline-flex items-center gap-1.5 border-b-2 px-2 py-1 text-sm font-bold transition-colors whitespace-nowrap shrink-0 ${
+                    activeTab === 'bank'
+                      ? 'border-emerald-600 text-emerald-800'
+                      : 'border-transparent text-slate-600 hover:text-emerald-900'
+                  }`}
+                >
+                  <BookOpen className="h-4 w-4" />
+                  <span>Bank Soal</span>
+                </button>
+              </nav>
+            ) : (
+              <div className="hidden text-sm font-semibold text-slate-500 md:block">
+                Ruang{' '}
+                <span className="font-mono-num font-bold text-emerald-900">
+                  {roomState.roomCode}
+                </span>
+                {' · '}
+                <span>{serverInfo?.url || window.location.origin}</span>
+              </div>
+            )}
+
+            {/* Zone 3: Sound, Full Mode (during gameplay), & Mode Siswa Action */}
+            <div className="flex items-center gap-2.5 shrink-0">
+              {isPlaying && (
+                <button
+                  type="button"
+                  data-testid="toggle-fullmode-btn"
+                  onClick={toggleFullscreen}
+                  title="Tampilan Layar Penuh Tanpa Scroll (Tombol F)"
+                  className="inline-flex h-10 items-center gap-1.5 rounded-xl border border-emerald-700 bg-emerald-600 px-3.5 text-xs font-extrabold text-white shadow-sm hover:bg-emerald-700 whitespace-nowrap shrink-0"
+                >
+                  <Maximize2 className="h-4 w-4" />
+                  <span>Full Mode</span>
+                </button>
+              )}
+
               <button
                 type="button"
-                onClick={() => {
-                  sound.play('click');
-                  onGoStudent();
-                }}
-                className="inline-flex h-10 items-center gap-1.5 rounded-xl border border-emerald-200 bg-emerald-50/70 px-3.5 text-xs font-bold text-emerald-900 hover:bg-emerald-100 whitespace-nowrap shrink-0"
+                onClick={() => setMuted(sound.toggleMute())}
+                aria-label={muted ? 'Aktifkan efek suara' : 'Bisukan efek suara'}
+                className="flex h-10 w-10 items-center justify-center rounded-xl border border-emerald-900/10 bg-white text-slate-600 hover:bg-emerald-50 hover:text-emerald-800"
               >
-                <Smartphone className="h-4 w-4 text-emerald-700" />
-                <span>Mode Siswa</span>
+                {muted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
               </button>
-            )}
+
+              {!roomState && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    sound.play('click');
+                    onGoStudent();
+                  }}
+                  className="inline-flex h-10 items-center gap-1.5 rounded-xl border border-emerald-200 bg-emerald-50/70 px-3.5 text-xs font-bold text-emerald-900 hover:bg-emerald-100 whitespace-nowrap shrink-0"
+                >
+                  <Smartphone className="h-4 w-4 text-emerald-700" />
+                  <span>Mode Siswa</span>
+                </button>
+              )}
+            </div>
           </div>
-        </div>
-      </header>
+        </header>
+      )}
 
       {/* Main Content */}
-      <main>
+      <main
+        className={
+          isPlayingFullView || isLockedStageGame
+            ? 'relative flex min-h-0 flex-1 flex-col overflow-hidden'
+            : ''
+        }
+      >
+        {/* Fallback Exit Full Mode floating control for non-Boss-Raid games (e.g. Quiz Kilat) */}
+        {isPlayingFullView && activeRoomGame?.id !== 'boss-raid' && (
+          <button
+            type="button"
+            data-testid="exit-fullmode-fallback-btn"
+            onClick={toggleFullscreen}
+            className="fixed right-4 top-4 z-50 inline-flex items-center gap-1.5 rounded-xl border border-white/20 bg-slate-900/90 px-3.5 py-2 text-xs font-extrabold text-white shadow-lg hover:bg-slate-800"
+          >
+            <Minimize2 className="h-4 w-4" />
+            <span>Keluar Full (Esc)</span>
+          </button>
+        )}
+
         {/* ACTIVE ROOM: LOBBY */}
         {roomState && roomState.status === 'lobby' && activeRoomGame && (
           <HostLobbyView
@@ -295,6 +392,8 @@ export function HostPage({ onGoStudent }: HostPageProps) {
             roomState={roomState}
             gameState={gameState}
             onForceEnd={handleForceEnd}
+            isFullscreen={isFullscreen}
+            onToggleFullscreen={toggleFullscreen}
           />
         )}
 
@@ -484,31 +583,57 @@ export function HostPage({ onGoStudent }: HostPageProps) {
 
                     {/* Mode-Specific Settings */}
                     {selectedGame?.modeType === 'realtime-boss' ? (
-                      <div className="flex flex-col gap-4">
-                        <div>
-                          <label
-                            htmlFor="boss-type"
-                            className="mb-1.5 block text-xs font-bold text-slate-700"
-                          >
-                            Pilih Pixel Boss Raksasa
-                          </label>
-                          <select
-                            id="boss-type"
-                            value={settings.bossType || 'inferno-dragon'}
-                            onChange={(e) =>
-                              setSettings({
-                                ...settings,
-                                bossType: e.target.value as GameSettings['bossType'],
-                              })
-                            }
-                            className="min-h-[44px] w-full rounded-xl border border-slate-300 bg-[#F7FAF8] px-3 text-sm font-bold text-slate-900 focus:border-emerald-600 focus:bg-white focus:outline-none"
-                          >
-                            <option value="inferno-dragon">Naga Api (Inferno Dragon)</option>
-                            <option value="titan-golem">Titan Golem (Ancient Colossus)</option>
-                            <option value="dark-overlord">Raja Kegelapan (Dark Overlord)</option>
-                          </select>
+                      <div className="flex flex-col gap-3.5">
+                        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                          <div>
+                            <label
+                              htmlFor="boss-type"
+                              className="mb-1.5 block text-xs font-bold text-slate-700"
+                            >
+                              Pilih Pixel Boss
+                            </label>
+                            <select
+                              id="boss-type"
+                              value={settings.bossType || 'inferno-dragon'}
+                              onChange={(e) =>
+                                setSettings({
+                                  ...settings,
+                                  bossType: e.target.value as GameSettings['bossType'],
+                                })
+                              }
+                              className="min-h-[44px] w-full rounded-xl border border-slate-300 bg-[#F7FAF8] px-3 text-sm font-bold text-slate-900 focus:border-emerald-600 focus:bg-white focus:outline-none"
+                            >
+                              <option value="inferno-dragon">Naga Api (Inferno Dragon)</option>
+                              <option value="titan-golem">Titan Golem (Armor Batu)</option>
+                              <option value="dark-overlord">Raja Kegelapan (Soul Drain)</option>
+                            </select>
+                          </div>
+                          <div>
+                            <label
+                              htmlFor="raid-level"
+                              className="mb-1.5 block text-xs font-bold text-slate-700"
+                            >
+                              Level Kesulitan Raid
+                            </label>
+                            <select
+                              id="raid-level"
+                              value={settings.raidLevel || 'standar'}
+                              onChange={(e) =>
+                                setSettings({
+                                  ...settings,
+                                  raidLevel: e.target.value as GameSettings['raidLevel'],
+                                })
+                              }
+                              className="min-h-[44px] w-full rounded-xl border border-slate-300 bg-[#F7FAF8] px-3 text-sm font-bold text-slate-900 focus:border-emerald-600 focus:bg-white focus:outline-none"
+                            >
+                              <option value="santai">Lv. 1 — Santai (Pemula)</option>
+                              <option value="standar">Lv. 2 — Standar (Rekomendasi)</option>
+                              <option value="epik">Lv. 3 — Epik (Minion + Sync)</option>
+                            </select>
+                          </div>
                         </div>
-                        <div className="grid grid-cols-2 gap-4">
+
+                        <div className="grid grid-cols-2 gap-3">
                           <div>
                             <label
                               htmlFor="boss-duration"
@@ -524,9 +649,9 @@ export function HostPage({ onGoStudent }: HostPageProps) {
                               }
                               className="min-h-[44px] w-full rounded-xl border border-slate-300 bg-[#F7FAF8] px-3 text-sm font-bold text-slate-900"
                             >
-                              <option value={60}>60 Detik</option>
                               <option value={90}>90 Detik</option>
                               <option value={120}>120 Detik</option>
+                              <option value={150}>150 Detik</option>
                               <option value={180}>180 Detik</option>
                             </select>
                           </div>
@@ -535,7 +660,7 @@ export function HostPage({ onGoStudent }: HostPageProps) {
                               htmlFor="boss-hp"
                               className="mb-1.5 block text-xs font-bold text-slate-700"
                             >
-                              HP Boss
+                              Skala HP Boss
                             </label>
                             <select
                               id="boss-hp"
@@ -545,10 +670,10 @@ export function HostPage({ onGoStudent }: HostPageProps) {
                               }
                               className="min-h-[44px] w-full rounded-xl border border-slate-300 bg-[#F7FAF8] px-3 text-sm font-bold text-slate-900"
                             >
-                              <option value={600}>600 HP (Cepat)</option>
-                              <option value={1200}>1.200 HP (Normal)</option>
-                              <option value={2200}>2.200 HP (Kelas Besar)</option>
-                              <option value={3600}>3.600 HP (Tantangan)</option>
+                              <option value={0}>Auto-Scale Kelas (Disarankan)</option>
+                              <option value={600}>600 HP (Demo Cepat)</option>
+                              <option value={1500}>1.500 HP (Kelompok Kecil)</option>
+                              <option value={15000}>15.000 HP (30 Siswa Manual)</option>
                             </select>
                           </div>
                         </div>
