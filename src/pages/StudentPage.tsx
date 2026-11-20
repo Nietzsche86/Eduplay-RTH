@@ -176,7 +176,7 @@ export function StudentPage({ onGoHost }: StudentPageProps) {
   return (
     <div className="min-h-screen bg-[#F4F8F6] bg-emerald-subtle-grid text-slate-900">
       {/* Compact Top Bar */}
-      <header className="sticky top-0 z-30 border-b border-emerald-900/10 bg-white/95 backdrop-blur-sm">
+      <header className="sticky top-0 z-30 border-b border-emerald-900/10 bg-white">
         <div className="mx-auto flex h-14 max-w-6xl items-center justify-between gap-4 px-4 sm:px-6">
           <div className="flex items-center gap-2.5 whitespace-nowrap shrink-0">
             <SchoolLogo className="h-9 w-9" />

@@ -34,10 +34,11 @@ export function HostPage({ onGoStudent }: HostPageProps) {
   const [selectedPackId, setSelectedPackId] = useState<string>('');
   const [settings, setSettings] = useState<GameSettings>({
     timePerQuestion: 15,
-    gameDuration: 90,
+    gameDuration: 120,
     shuffleQuestions: true,
     questionLimit: 0,
-    bossMaxHp: 1000,
+    bossMaxHp: 1200,
+    bossType: 'inferno-dragon',
   });
 
   const [roomState, setRoomState] = useState<RoomState | null>(null);
@@ -184,7 +185,7 @@ export function HostPage({ onGoStudent }: HostPageProps) {
   return (
     <div className="min-h-screen bg-[#F4F8F6] bg-emerald-subtle-grid text-slate-900">
       {/* Clean 3-Zone Top Bar */}
-      <header className="sticky top-0 z-30 border-b border-emerald-900/10 bg-white/95 backdrop-blur-sm">
+      <header className="sticky top-0 z-30 border-b border-emerald-900/10 bg-white">
         <div className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-8 px-4 sm:px-6 lg:px-8">
           {/* Zone 1: Single-line Brand Wordmark */}
           <button
@@ -483,48 +484,73 @@ export function HostPage({ onGoStudent }: HostPageProps) {
 
                     {/* Mode-Specific Settings */}
                     {selectedGame?.modeType === 'realtime-boss' ? (
-                      <div className="grid grid-cols-2 gap-4">
+                      <div className="flex flex-col gap-4">
                         <div>
                           <label
-                            htmlFor="boss-duration"
+                            htmlFor="boss-type"
                             className="mb-1.5 block text-xs font-bold text-slate-700"
                           >
-                            Durasi Pertempuran
+                            Pilih Pixel Boss Raksasa
                           </label>
                           <select
-                            id="boss-duration"
-                            value={settings.gameDuration}
+                            id="boss-type"
+                            value={settings.bossType || 'inferno-dragon'}
                             onChange={(e) =>
-                              setSettings({ ...settings, gameDuration: Number(e.target.value) })
+                              setSettings({
+                                ...settings,
+                                bossType: e.target.value as GameSettings['bossType'],
+                              })
                             }
-                            className="min-h-[44px] w-full rounded-xl border border-slate-300 bg-[#F7FAF8] px-3 text-sm font-bold text-slate-900"
+                            className="min-h-[44px] w-full rounded-xl border border-slate-300 bg-[#F7FAF8] px-3 text-sm font-bold text-slate-900 focus:border-emerald-600 focus:bg-white focus:outline-none"
                           >
-                            <option value={60}>60 Detik</option>
-                            <option value={90}>90 Detik</option>
-                            <option value={120}>120 Detik</option>
-                            <option value={180}>180 Detik</option>
+                            <option value="inferno-dragon">Naga Api (Inferno Dragon)</option>
+                            <option value="titan-golem">Titan Golem (Ancient Colossus)</option>
+                            <option value="dark-overlord">Raja Kegelapan (Dark Overlord)</option>
                           </select>
                         </div>
-                        <div>
-                          <label
-                            htmlFor="boss-hp"
-                            className="mb-1.5 block text-xs font-bold text-slate-700"
-                          >
-                            HP Boss
-                          </label>
-                          <select
-                            id="boss-hp"
-                            value={settings.bossMaxHp}
-                            onChange={(e) =>
-                              setSettings({ ...settings, bossMaxHp: Number(e.target.value) })
-                            }
-                            className="min-h-[44px] w-full rounded-xl border border-slate-300 bg-[#F7FAF8] px-3 text-sm font-bold text-slate-900"
-                          >
-                            <option value={600}>600 HP (Cepat)</option>
-                            <option value={1000}>1.000 HP (Normal)</option>
-                            <option value={2000}>2.000 HP (Kelas Besar)</option>
-                            <option value={3500}>3.500 HP (Tantangan)</option>
-                          </select>
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <label
+                              htmlFor="boss-duration"
+                              className="mb-1.5 block text-xs font-bold text-slate-700"
+                            >
+                              Durasi Pertempuran
+                            </label>
+                            <select
+                              id="boss-duration"
+                              value={settings.gameDuration}
+                              onChange={(e) =>
+                                setSettings({ ...settings, gameDuration: Number(e.target.value) })
+                              }
+                              className="min-h-[44px] w-full rounded-xl border border-slate-300 bg-[#F7FAF8] px-3 text-sm font-bold text-slate-900"
+                            >
+                              <option value={60}>60 Detik</option>
+                              <option value={90}>90 Detik</option>
+                              <option value={120}>120 Detik</option>
+                              <option value={180}>180 Detik</option>
+                            </select>
+                          </div>
+                          <div>
+                            <label
+                              htmlFor="boss-hp"
+                              className="mb-1.5 block text-xs font-bold text-slate-700"
+                            >
+                              HP Boss
+                            </label>
+                            <select
+                              id="boss-hp"
+                              value={settings.bossMaxHp}
+                              onChange={(e) =>
+                                setSettings({ ...settings, bossMaxHp: Number(e.target.value) })
+                              }
+                              className="min-h-[44px] w-full rounded-xl border border-slate-300 bg-[#F7FAF8] px-3 text-sm font-bold text-slate-900"
+                            >
+                              <option value={600}>600 HP (Cepat)</option>
+                              <option value={1200}>1.200 HP (Normal)</option>
+                              <option value={2200}>2.200 HP (Kelas Besar)</option>
+                              <option value={3600}>3.600 HP (Tantangan)</option>
+                            </select>
+                          </div>
                         </div>
                       </div>
                     ) : (

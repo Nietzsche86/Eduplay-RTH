@@ -26,11 +26,11 @@ export const GAME_REGISTRY: GameModule[] = [
   },
   {
     id: 'boss-raid',
-    name: 'Serbuan Boss Edukasi',
+    name: 'Boss Raid: Pixel Heroes',
     description:
-      'Kolaborasi satu kelas melawan Dr. Golem Logika! Setiap jawaban benar melancarkan serangan kritis demi jadi MVP.',
+      'Pilih 5 kelas Hero Pixel 16-bit dan lawan Pixel Boss raksasa bareng satu kelas! Aktifkan jurus, Break Ultimate, dan Mega Pixel Beam.',
     icon: 'swords',
-    category: 'Aksi Co-op',
+    category: 'Kerja Sama Tim (16-bit Pixel RPG)',
     themeColor: '#D97706',
     modeType: 'realtime-boss',
     HostComponent: BossRaidHost,

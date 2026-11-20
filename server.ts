@@ -75,6 +75,7 @@ interface RoomRecord {
     shuffleQuestions: boolean;
     questionLimit: number;
     bossMaxHp: number;
+    bossType: 'inferno-dragon' | 'titan-golem' | 'dark-overlord';
   };
   players: RoomPlayer[];
   results: Array<{
@@ -288,6 +289,9 @@ async function startServer() {
             shuffleQuestions: Boolean(rawSettings.shuffleQuestions ?? true),
             questionLimit: Math.max(0, Number(rawSettings.questionLimit) || 0),
             bossMaxHp: Math.max(300, Number(rawSettings.bossMaxHp) || 1000),
+            bossType: ['inferno-dragon', 'titan-golem', 'dark-overlord'].includes(rawSettings.bossType)
+              ? rawSettings.bossType
+              : 'inferno-dragon',
           },
           players: [],
           results: [],

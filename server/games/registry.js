@@ -1,9 +1,9 @@
 import { quizKilatHandler } from './quiz-kilat/handler.js';
-import { bossRaidHandler } from './boss-raid/handler.js';
+import { bossRaidHandler } from './bossRaid.js';
 
 /**
  * Modular Backend Game Registry
- * Setiap game baru cukup menambahkan folder sendiri di `server/games/<game-id>/handler.js`
+ * Setiap game baru cukup menambahkan file/folder sendiri di `server/games/`
  * dengan antarmuka standar: { id, init, onPlayerAction, onDisconnect, cleanup }
  * lalu mendaftarkannya di array `gameHandlers` di bawah ini.
  */

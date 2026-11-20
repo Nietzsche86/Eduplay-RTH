@@ -39,12 +39,15 @@ export interface GameResultEntry {
   wrongCount: number;
 }
 
+export type BossType = 'inferno-dragon' | 'titan-golem' | 'dark-overlord';
+
 export interface GameSettings {
   timePerQuestion: number; // seconds (for Quiz Kilat)
   gameDuration: number; // seconds (for Boss Raid)
   shuffleQuestions: boolean;
   questionLimit: number; // 0 = all questions in pack
   bossMaxHp: number;
+  bossType?: BossType;
 }
 
 export type RoomStatus = 'lobby' | 'playing' | 'finished';
