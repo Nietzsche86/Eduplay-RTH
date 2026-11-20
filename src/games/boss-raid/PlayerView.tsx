@@ -242,9 +242,14 @@ export function BossRaidPlayer({ socket, roomCode, player, gameState }: PlayerGa
   };
 
   // ========================================================
-  // 1. HERO SELECTION PHASE (15s)
+  // 1. HERO SELECTION PHASE (15s) + LIVE TEAM COMPOSITION
   // ========================================================
   if (gameState.phase === 'hero_select') {
+    const comp = gameState.teamComposition;
+    const roleCounts: Record<string, number> = comp?.counts || {};
+    const neededRoles: string[] = comp?.neededRoles || [];
+    const hasFullFormation = Boolean(comp?.hasFullFormation);
+
     return (
       <div
         data-testid="hero-select-screen"
@@ -259,13 +264,36 @@ export function BossRaidPlayer({ socket, roomCode, player, gameState }: PlayerGa
               </span>
             </div>
             <p className="mt-1.5 text-xs text-slate-200">
-              Ketuk Hero favoritmu — karaktermu langsung muncul berbaris di proyektor!
+              Bagilah peran dengan teman sekelas! Semua peran mendapat skor Podium yang adil.
             </p>
+            {hasFullFormation ? (
+              <div
+                data-testid="full-formation-banner"
+                className="mt-2 border border-emerald-300 bg-emerald-800/80 px-2.5 py-1 text-[11px] font-black text-amber-200"
+              >
+                ★ FORMASI TIM SEIMBANG AKTIF! (+10% COMBO FEVER)
+              </div>
+            ) : (
+              neededRoles.length > 0 && (
+                <div
+                  data-testid="team-need-banner"
+                  className="mt-2 border border-amber-400/60 bg-slate-950/75 px-2.5 py-1 text-[11px] font-bold text-amber-200"
+                >
+                  Tim masih butuh:{' '}
+                  {neededRoles
+                    .slice(0, 3)
+                    .map((id) => HERO_CLASS_MAP[id as HeroClassId]?.name || id)
+                    .join(', ')}
+                </div>
+              )
+            )}
           </div>
 
           <div className="flex flex-col gap-2.5">
             {HERO_CLASS_LIST.map((hero) => {
               const selected = myHero?.selectedHero && myHeroClass === hero.id;
+              const pickedCount = Number(roleCounts[hero.id] || 0);
+              const isNeeded = neededRoles.includes(hero.id) && !selected;
               return (
                 <button
                   key={hero.id}
@@ -275,7 +303,9 @@ export function BossRaidPlayer({ socket, roomCode, player, gameState }: PlayerGa
                   className={`pixel-btn flex items-center gap-3.5 border-2 p-3 text-left ${
                     selected
                       ? 'border-amber-300 bg-emerald-900/90 ring-2 ring-amber-300/60'
-                      : 'border-emerald-500/35 bg-[#10212E] hover:border-emerald-400'
+                      : isNeeded
+                        ? 'border-amber-400/70 bg-[#132833] hover:border-amber-300'
+                        : 'border-emerald-500/35 bg-[#10212E] hover:border-emerald-400'
                   }`}
                 >
                   <div className="flex h-16 w-16 shrink-0 items-center justify-center border-2 border-slate-950 bg-[#08131B] p-1">
@@ -286,17 +316,32 @@ export function BossRaidPlayer({ socket, roomCode, player, gameState }: PlayerGa
                     />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="text-base font-black text-white">{hero.name}</span>
-                      <span
-                        className="border px-1.5 py-0.5 text-[10px] font-black text-slate-950"
-                        style={{
-                          backgroundColor: hero.accentColor,
-                          borderColor: hero.accentColor,
-                        }}
-                      >
-                        {hero.shortPerk}
-                      </span>
+                    <div className="flex flex-wrap items-center justify-between gap-1.5">
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <span className="text-base font-black text-white">{hero.name}</span>
+                        <span
+                          className="border px-1.5 py-0.5 text-[10px] font-black text-slate-950"
+                          style={{
+                            backgroundColor: hero.accentColor,
+                            borderColor: hero.accentColor,
+                          }}
+                        >
+                          {hero.shortPerk}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        {isNeeded && (
+                          <span className="border border-amber-300 bg-amber-400 px-1.5 py-0.5 text-[9px] font-black text-slate-950">
+                            BUTUH!
+                          </span>
+                        )}
+                        <span
+                          data-testid={`hero-count-${hero.id}`}
+                          className="border border-white/20 bg-slate-950/90 px-1.5 py-0.5 text-[10px] font-extrabold text-emerald-200"
+                        >
+                          {pickedCount} dipilih
+                        </span>
+                      </div>
                     </div>
                     <p className="mt-1 text-xs leading-snug text-slate-300">{hero.description}</p>
                   </div>
@@ -371,12 +416,39 @@ export function BossRaidPlayer({ socket, roomCode, player, gameState }: PlayerGa
     Math.min(100, (gameState.castleHp / Math.max(1, gameState.castleMaxHp)) * 100)
   );
   const isCharging = gameState.ultimate?.status === 'charging';
+  const nextUltInSec = Number(gameState.ultimate?.nextUltimateInSec ?? 25);
   const energy = myHero?.energy || 0;
-  const healAmount = myHeroClass === 'healer' ? 130 : 65;
-  const shieldAmount = myHeroClass === 'knight' ? 100 : 45;
+  const healAmount = myHeroClass === 'healer' ? 140 : 70;
+  const shieldAmount = myHeroClass === 'knight' ? 110 : 50;
   const activeCinematic = gameState.cinematic;
   const isMyClassSynced = Boolean(gameState.classSync?.classes?.includes(myHeroClass));
   const activeMinionCount = Array.isArray(gameState.minions) ? gameState.minions.length : 0;
+  const hasHealerInTeam = Boolean((gameState.teamComposition?.counts?.healer || 0) > 0);
+
+  // Zero-distraction Smart Highlight: recommends 1 optimal button based on Hero role & battle urgency
+  const smartRec: { skill: 'primary' | 'heal' | 'shield'; badge: string } = (() => {
+    if (myHeroClass === 'healer') {
+      if (gameState.castleBurning) return { skill: 'heal', badge: 'DARURAT! PADAMKAN API!' };
+      if (castlePct < 78) return { skill: 'heal', badge: 'DISARANKAN: HEAL 2X!' };
+      return { skill: 'primary', badge: 'BENTENG AMAN · SERANG!' };
+    }
+    if (myHeroClass === 'knight') {
+      if (isCharging || nextUltInSec <= 7) {
+        return { skill: 'shield', badge: 'ULTIMATE! PASANG PERISAI!' };
+      }
+      if ((gameState.castleShield || 0) < 95) {
+        return { skill: 'shield', badge: 'DISARANKAN: PERISAI 2X!' };
+      }
+      return { skill: 'primary', badge: 'PERISAI TEBAL · SERANG!' };
+    }
+    if (gameState.castleBurning && !hasHealerInTeam) {
+      return { skill: 'heal', badge: 'DARURAT! PADAMKAN API!' };
+    }
+    if (castlePct < 28 && !hasHealerInTeam) {
+      return { skill: 'heal', badge: 'DARURAT! BENTENG KRITIS!' };
+    }
+    return { skill: 'primary', badge: 'JURUS ANDALAN!' };
+  })();
 
   return (
     <div
@@ -396,6 +468,7 @@ export function BossRaidPlayer({ socket, roomCode, player, gameState }: PlayerGa
             <p className="mt-0.5 text-[11px] font-bold text-white">
               PROGRES BREAK: {gameState.ultimate.breakProgress}/{gameState.ultimate.breakTarget} (
               {gameState.ultimate.chargeRemainingSec}d)
+              {myHeroClass === 'archer' ? ' · PEMANAH 2X BREAK!' : ''}
             </p>
           </div>
         )}
@@ -411,12 +484,22 @@ export function BossRaidPlayer({ socket, roomCode, player, gameState }: PlayerGa
         >
           {/* Top Compact Info Strip */}
           <div className="flex items-center justify-between gap-2 text-[10px] font-black">
-            <div className="flex items-center gap-1.5 min-w-0">
+            <div className="flex flex-wrap items-center gap-1 min-w-0">
               <span className="truncate text-white">{player.name}</span>
               <span style={{ color: heroMeta.accentColor }}>({heroMeta.name})</span>
               {gameState.castleBurning && (
                 <span className="border border-orange-400 bg-orange-600 px-1 text-[9px] text-white">
                   BURN!
+                </span>
+              )}
+              {gameState.teamSpiritActive && (
+                <span className="border border-amber-300 bg-amber-500 px-1 text-[9px] text-slate-950">
+                  BUFF +15%
+                </span>
+              )}
+              {gameState.knightWardActive && (
+                <span className="border border-sky-300 bg-sky-500 px-1 text-[9px] text-slate-950">
+                  WARD -25%
                 </span>
               )}
             </div>
@@ -648,11 +731,12 @@ export function BossRaidPlayer({ socket, roomCode, player, gameState }: PlayerGa
             <button
               type="button"
               data-testid="skill-btn-primary"
+              data-recommended={smartRec.skill === 'primary' ? 'true' : 'false'}
               onClick={() => handleUseSkill('primary')}
               className={`pixel-btn flex min-h-[66px] items-center gap-3 border-2 px-3.5 py-2.5 text-left text-white hover:brightness-110 ${
-                isMyClassSynced
+                isMyClassSynced || smartRec.skill === 'primary'
                   ? 'border-yellow-200 bg-gradient-to-r from-amber-500 via-orange-500 to-rose-500 ring-2 ring-amber-300'
-                  : 'border-amber-300 bg-gradient-to-r from-amber-600 to-orange-600'
+                  : 'border-amber-300/60 bg-gradient-to-r from-amber-700/85 to-orange-700/85 opacity-90'
               }`}
             >
               <div className="flex h-11 w-11 shrink-0 items-center justify-center border-2 border-amber-200 bg-slate-950/60">
@@ -663,9 +747,16 @@ export function BossRaidPlayer({ socket, roomCode, player, gameState }: PlayerGa
                 )}
               </div>
               <div className="min-w-0 flex-1">
-                <p className="text-sm font-black uppercase tracking-wide text-white">
-                  JURUS UTAMA: {heroMeta.skillName}
-                </p>
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <p className="text-sm font-black uppercase tracking-wide text-white">
+                    JURUS UTAMA: {heroMeta.skillName}
+                  </p>
+                  {smartRec.skill === 'primary' && (
+                    <span className="border border-yellow-100 bg-yellow-300 px-1.5 py-0.5 text-[9px] font-black text-slate-950">
+                      ★ {smartRec.badge}
+                    </span>
+                  )}
+                </div>
                 <p className="mt-0.5 text-[11px] font-bold text-amber-100">
                   {activeMinionCount > 0
                     ? `Menyerang Minion & Boss! ${heroMeta.shortPerk}`
@@ -678,22 +769,34 @@ export function BossRaidPlayer({ socket, roomCode, player, gameState }: PlayerGa
             <button
               type="button"
               data-testid="skill-btn-heal"
+              data-recommended={smartRec.skill === 'heal' ? 'true' : 'false'}
               onClick={() => handleUseSkill('heal')}
-              className="pixel-btn flex min-h-[60px] items-center gap-3 border-2 border-emerald-300 bg-emerald-700 px-3.5 py-2.5 text-left text-white hover:bg-emerald-600"
+              className={`pixel-btn flex min-h-[60px] items-center gap-3 border-2 px-3.5 py-2.5 text-left text-white ${
+                smartRec.skill === 'heal'
+                  ? 'border-emerald-200 bg-emerald-600 ring-2 ring-emerald-300 hover:bg-emerald-500'
+                  : 'border-emerald-300/60 bg-emerald-800/85 hover:bg-emerald-700'
+              }`}
             >
               <div className="flex h-10 w-10 shrink-0 items-center justify-center border-2 border-emerald-200 bg-slate-950/60">
                 <Heart className="h-5 w-5 text-emerald-300" />
               </div>
               <div className="min-w-0 flex-1">
-                <p className="text-sm font-black uppercase text-white">
-                  HEAL BENTENG (+{healAmount} HP)
-                </p>
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <p className="text-sm font-black uppercase text-white">
+                    HEAL BENTENG (+{healAmount} HP)
+                  </p>
+                  {smartRec.skill === 'heal' && (
+                    <span className="animate-pulse border border-amber-200 bg-amber-300 px-1.5 py-0.5 text-[9px] font-black text-slate-950">
+                      ★ {smartRec.badge}
+                    </span>
+                  )}
+                </div>
                 <p className="mt-0.5 text-[11px] font-bold text-emerald-100">
                   {gameState.castleBurning
                     ? '🔥 PADAMKAN BARA API BENTENG SEKARANG!'
                     : myHeroClass === 'healer'
-                      ? 'BONUS 2X TABIB AKTIF! Pulihkan Benteng super deras!'
-                      : 'Pulihkan HP Benteng dari serangan Boss.'}
+                      ? 'BONUS TABIB: Overheal jadi Perisai + Buff Tim +15%!'
+                      : 'Pulihkan HP Benteng & padamkan Bara Api.'}
                 </p>
               </div>
             </button>
@@ -702,19 +805,31 @@ export function BossRaidPlayer({ socket, roomCode, player, gameState }: PlayerGa
             <button
               type="button"
               data-testid="skill-btn-shield"
+              data-recommended={smartRec.skill === 'shield' ? 'true' : 'false'}
               onClick={() => handleUseSkill('shield')}
-              className="pixel-btn flex min-h-[60px] items-center gap-3 border-2 border-sky-300 bg-sky-700 px-3.5 py-2.5 text-left text-white hover:bg-sky-600"
+              className={`pixel-btn flex min-h-[60px] items-center gap-3 border-2 px-3.5 py-2.5 text-left text-white ${
+                smartRec.skill === 'shield'
+                  ? 'border-sky-200 bg-sky-600 ring-2 ring-sky-300 hover:bg-sky-500'
+                  : 'border-sky-300/60 bg-sky-800/85 hover:bg-sky-700'
+              }`}
             >
               <div className="flex h-10 w-10 shrink-0 items-center justify-center border-2 border-sky-200 bg-slate-950/60">
                 <Shield className="h-5 w-5 text-sky-200" />
               </div>
               <div className="min-w-0 flex-1">
-                <p className="text-sm font-black uppercase text-white">
-                  PERISAI BENTENG (+{shieldAmount} SHIELD)
-                </p>
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <p className="text-sm font-black uppercase text-white">
+                    PERISAI BENTENG (+{shieldAmount} SHIELD)
+                  </p>
+                  {smartRec.skill === 'shield' && (
+                    <span className="animate-pulse border border-amber-200 bg-amber-300 px-1.5 py-0.5 text-[9px] font-black text-slate-950">
+                      ★ {smartRec.badge}
+                    </span>
+                  )}
+                </div>
                 <p className="mt-0.5 text-[11px] font-bold text-sky-100">
                   {myHeroClass === 'knight'
-                    ? 'BONUS KSATRIA AKTIF! Perisai Benteng 2x lebih tebal!'
+                    ? 'BONUS KSATRIA: Perisai 2x + Benteng Kebal 25%!'
                     : 'Menahan serangan Ultimate & serangan balasan Boss.'}
                 </p>
               </div>

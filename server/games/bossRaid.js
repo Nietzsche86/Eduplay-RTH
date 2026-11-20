@@ -7,6 +7,8 @@ import {
   computeBreakTarget,
   computeComboFeverGain,
   computeScaledBossHp,
+  computeTeamComposition,
+  computeWrongAnswerCounterDamage,
   formatStandardResults,
   isBossEnraged,
   isBossLastStand,
@@ -50,6 +52,7 @@ export const bossRaidHandler = {
     const bossMaxHp = computeScaledBossHp({
       playerCount,
       raidLevel,
+      durationSec,
       manualBossHp: Number(settings.bossMaxHp) || 0,
     });
     const bossType = normalizeBossType(settings.bossType);
@@ -103,6 +106,8 @@ export const bossRaidHandler = {
       castleBurningUntil: 0, // Inferno Dragon Burn
       bossArmorUntil: 0, // Titan Golem Stone Armor
       lastSoulDrainAt: 0, // Dark Overlord capped Soul Drain
+      healerBuffUntil: 0, // Tabib Team Spirit (+15% team damage for 8s)
+      knightWardUntil: 0, // Ksatria Bastion Ward (-25% boss damage for 6s)
       nextTraitAt: 0,
       minions: [], // { id, name, hp, maxHp }
       minionsSpawned: false,
@@ -296,7 +301,7 @@ export const bossRaidHandler = {
       const cin = state.cinematic;
       state.cinematic = null;
 
-      const tapBonusFactor = 1 + Math.min(0.65, cin.tapCount / Math.max(12, getConnectedCount() * 5));
+      const tapBonusFactor = 1 + Math.min(0.45, cin.tapCount / Math.max(12, getConnectedCount() * 5));
       const finalDamage = Math.round(cin.pendingDamage * tapBonusFactor);
       state.bossHp = Math.max(0, state.bossHp - finalDamage);
 
@@ -427,6 +432,7 @@ export const bossRaidHandler = {
       }
 
       const heroicSpiritActive = state.castleHp / state.castleMaxHp < 0.3;
+      const teamComposition = computeTeamComposition(state.playerStats.values());
 
       broadcastGameState({
         gameId: 'boss-raid',
@@ -448,6 +454,9 @@ export const bossRaidHandler = {
         bossArmorActive: t < state.bossArmorUntil,
         castleBurning: t < state.castleBurningUntil,
         heroicSpiritActive,
+        teamSpiritActive: t < state.healerBuffUntil,
+        knightWardActive: t < state.knightWardUntil,
+        teamComposition,
         minions: state.minions,
         classSync: activeClassSync,
         cinematic: activeCinematic,
@@ -456,7 +465,7 @@ export const bossRaidHandler = {
         castleMaxHp: state.castleMaxHp,
         castleShield: state.castleShield,
         castleMaxShield: state.castleMaxShield,
-        comboFever: state.comboFever,
+        comboFever: Math.round(state.comboFever),
         classStreak: state.classStreak,
         ultimate: {
           status: state.ultimateStatus,
@@ -635,6 +644,7 @@ export const bossRaidHandler = {
                 rawDamage: rawUltDamage,
                 castleHp: state.castleHp,
                 castleShield: state.castleShield,
+                hasKnightWard: tickNow < state.knightWardUntil,
               });
               state.castleHp = result.nextHp;
               state.castleShield = result.nextShield;
@@ -647,7 +657,7 @@ export const bossRaidHandler = {
                 shieldAbsorbed: result.shieldAbsorbed,
                 text: `${state.bossName} melancarkan ${state.bossUltimateName}! Benteng -${result.hpDamage} HP${
                   result.shieldAbsorbed > 0 ? ` (Perisai tahan ${result.shieldAbsorbed})` : ''
-                }!`,
+                }${result.wardMitigated > 0 ? ` (Ward -${result.wardMitigated})` : ''}!`,
               });
 
               if (state.castleHp <= 0) {
@@ -755,15 +765,17 @@ export const bossRaidHandler = {
           message: 'Benar! +1 Energi Aksi — pilih jurusmu!',
         };
 
-        // Check Break Phase progress
+        // Check Break Phase progress (Archer contributes 2x Break!)
         if (state.ultimateStatus === 'charging') {
-          state.breakProgress += 1;
+          const heroCfg = HERO_CLASSES[normalizeHeroClass(stats.heroClass)];
+          const breakStep = heroCfg?.breakContribution || 1;
+          state.breakProgress += breakStep;
           if (state.breakProgress >= state.breakTarget) {
             state.ultimateStatus = 'idle';
             state.bossStunnedUntil = now + BOSS_STUN_DURATION_MS;
             state.bossArmorUntil = 0; // Breaking shatters Stone Armor too!
             state.nextUltimateAt = now + ULTIMATE_INTERVAL_SEC * 1000;
-            const breakBonusDmg = Math.max(85, Math.round(state.bossMaxHp * 0.08));
+            const breakBonusDmg = Math.max(75, Math.round(state.bossMaxHp * 0.05));
             state.bossHp = Math.max(0, state.bossHp - breakBonusDmg);
             stats.score += 120;
             stats.damageDealt += breakBonusDmg;
@@ -792,18 +804,23 @@ export const bossRaidHandler = {
           }
         }
 
-        // Charge Combo Fever Meter (boosted 1.5x during Heroic Spirit comeback!)
+        // Charge Combo Fever Meter proportionally to class size (Rogue 1.6x, Full Formation +10%, Comeback 1.5x!)
         if (state.bossHp > 0 && !state.cinematic) {
+          const comp = computeTeamComposition(state.playerStats.values());
           const feverGain = computeComboFeverGain(
             state.getConnectedCount(),
             state.castleHp,
-            state.castleMaxHp
+            state.castleMaxHp,
+            {
+              heroClass: stats.heroClass,
+              hasFullFormation: comp.hasFullFormation,
+            }
           );
           state.comboFever = Math.min(100, state.comboFever + feverGain);
 
           if (state.comboFever >= 100) {
             state.comboFever = 0;
-            const baseMegaDmg = Math.max(150, Math.round(state.bossMaxHp * 0.14));
+            const baseMegaDmg = Math.max(140, Math.round(state.bossMaxHp * 0.095));
             state.cinematic = {
               id: now,
               kind: 'mega_beam',
@@ -856,7 +873,11 @@ export const bossRaidHandler = {
           });
         }
 
-        const counterDmg = state.bossEnraged ? 16 : 10;
+        const counterDmg = computeWrongAnswerCounterDamage({
+          connectedPlayerCount: state.getConnectedCount(),
+          isEnraged: state.bossEnraged,
+          hasKnightWard: now < state.knightWardUntil,
+        });
         const dmgRes = applyBossUltimateDamage({
           rawDamage: counterDmg,
           castleHp: state.castleHp,
@@ -910,13 +931,14 @@ export const bossRaidHandler = {
           isClassSynced,
           bossHasStoneArmor,
           hasActiveMinions,
+          hasTeamSpiritBuff: now < state.healerBuffUntil,
         });
 
         let minionDefeatedName = null;
         if (hasActiveMinions) {
-          // Attacks cleave active Minion while also dealing chip damage to Boss!
+          // Attacks cleave active Minion (Mage deals extra minion damage!) while dealing chip damage to Boss
           const targetMinion = state.minions[0];
-          targetMinion.hp = Math.max(0, targetMinion.hp - Math.round(res.totalDamage * 1.15));
+          targetMinion.hp = Math.max(0, targetMinion.hp - res.minionDamage);
           if (targetMinion.hp <= 0) {
             minionDefeatedName = targetMinion.name;
             state.minions.shift();
@@ -940,6 +962,7 @@ export const bossRaidHandler = {
 
         const critText = res.isCritical ? ' CRITICAL!' : '';
         const syncText = res.isClassSynced ? ' [2X SYNC!]' : '';
+        const pierceText = res.piercedArmor ? ' [TEMBUS ARMOR!]' : '';
         const minionNote = minionDefeatedName ? ` (${minionDefeatedName} K.O.!)` : '';
 
         stats.lastFeedback = {
@@ -950,7 +973,7 @@ export const bossRaidHandler = {
           isCritical: res.isCritical,
           heroClass: stats.heroClass,
           skillName: res.skillName,
-          message: `${res.skillName}: -${res.totalDamage} HP${critText}${syncText}${minionNote}`,
+          message: `${res.skillName}: -${res.totalDamage} HP${critText}${pierceText}${syncText}${minionNote}`,
         };
 
         state.pushEvent({
@@ -966,7 +989,7 @@ export const bossRaidHandler = {
           bonusShield: res.bonusShield,
           bonusHeal: res.bonusHeal,
           minionDefeated: minionDefeatedName,
-          text: `${player.name} (${HERO_CLASSES[stats.heroClass].name}) melancarkan ${res.skillName}: -${res.totalDamage} HP${critText}${minionNote}`,
+          text: `${player.name} (${HERO_CLASSES[stats.heroClass].name}) melancarkan ${res.skillName}: -${res.totalDamage} HP${critText}${pierceText}${minionNote}`,
         });
 
         state.checkPhaseTransitions();
@@ -986,23 +1009,33 @@ export const bossRaidHandler = {
           castleMaxHp: state.castleMaxHp,
           castleShield: state.castleShield,
           castleMaxShield: state.castleMaxShield,
+          streak: stats.streak,
         });
         const wasBurning = now < state.castleBurningUntil;
         state.castleBurningUntil = 0;
         state.castleHp = res.nextHp;
+        state.castleShield = res.nextShield;
+        if (res.grantsTeamSpirit) {
+          state.healerBuffUntil = now + 8000;
+        }
         stats.healDone += res.amount;
         stats.score += res.points;
+
+        const overhealNote = res.overhealShield > 0 ? ` +${res.overhealShield} Perisai!` : '';
+        const buffNote = res.grantsTeamSpirit ? ' + Buff Tim 15%!' : '';
 
         stats.lastFeedback = {
           id: now,
           isCorrect: true,
           kind: 'skill_heal',
           amount: res.amount,
-          message: `Benteng pulih +${res.amount} HP${wasBurning ? ' & Api Padam!' : ''}`,
+          message: `Benteng +${res.amount} HP${wasBurning ? ' & Api Padam' : ''}${overhealNote}${buffNote}`,
         };
 
         state.setTeamToast(
-          `${player.name} memulihkan +${res.amount} HP Benteng${wasBurning ? ' & memadamkan Burn!' : '!'}`,
+          `${player.name} memulihkan +${res.amount} HP${overhealNote}${
+            res.grantsTeamSpirit ? ' · BUFF DAMAGE TIM +15%!' : ''
+          }`,
           'heal'
         );
 
@@ -1014,7 +1047,7 @@ export const bossRaidHandler = {
           healAmount: res.amount,
           isBoosted: res.isBoosted,
           cleansedBurn: wasBurning,
-          text: `${player.name} memulihkan Benteng +${res.amount} HP${wasBurning ? ' (Burn Padam!)' : '!'}`,
+          text: `${player.name} memulihkan Benteng +${res.amount} HP${wasBurning ? ' (Burn Padam!)' : ''}${buffNote}`,
         });
       } else if (skillType === 'shield') {
         const res = resolveSupportAction({
@@ -1024,20 +1057,26 @@ export const bossRaidHandler = {
           castleMaxHp: state.castleMaxHp,
           castleShield: state.castleShield,
           castleMaxShield: state.castleMaxShield,
+          streak: stats.streak,
         });
         state.castleShield = res.nextShield;
+        if (res.grantsKnightWard) {
+          state.knightWardUntil = now + 6000;
+        }
         stats.shieldDone += res.amount;
         stats.score += res.points;
+
+        const wardNote = res.grantsKnightWard ? ' · Benteng Kebal 25%!' : '';
 
         stats.lastFeedback = {
           id: now,
           isCorrect: true,
           kind: 'skill_shield',
           amount: res.amount,
-          message: `Perisai Benteng +${res.amount}${res.isBoosted ? ' (Bonus Ksatria!)' : ''}`,
+          message: `Perisai Benteng +${res.amount}${wardNote}`,
         };
 
-        state.setTeamToast(`${player.name} memperkuat Perisai Benteng +${res.amount}!`, 'shield');
+        state.setTeamToast(`${player.name} memasang Perisai +${res.amount}${wardNote}`, 'shield');
 
         state.pushEvent({
           type: 'hero_shield',
@@ -1046,7 +1085,7 @@ export const bossRaidHandler = {
           heroClass: stats.heroClass,
           shieldAmount: res.amount,
           isBoosted: res.isBoosted,
-          text: `${player.name} memperkuat Perisai Benteng +${res.amount}!`,
+          text: `${player.name} memperkuat Perisai Benteng +${res.amount}${wardNote}`,
         });
       }
 

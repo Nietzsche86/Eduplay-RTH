@@ -2091,8 +2091,25 @@ export function BossRaidHost({
       {/* BOTTOM RETRO RPG BAR (shrink-0, compact for zero-scroll fit) */}
       <div className="grid shrink-0 grid-cols-1 gap-2 lg:grid-cols-12">
         <section className="pixel-panel rounded-xl border-2 border-emerald-500/35 bg-[#0D1E2B] px-3.5 py-2 lg:col-span-7">
-          <div className="flex items-center justify-between font-mono-num text-[10px] font-black uppercase tracking-wider text-emerald-300">
-            <span>LIVE BATTLE LOG</span>
+          <div className="flex flex-wrap items-center justify-between gap-2 font-mono-num text-[10px] font-black uppercase tracking-wider text-emerald-300">
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span>LIVE BATTLE LOG</span>
+              {gameState.teamComposition?.hasFullFormation && (
+                <span className="border border-emerald-400/60 bg-emerald-950 px-1.5 py-0.5 text-[9px] text-emerald-200">
+                  FORMASI LENGKAP +10% FEVER
+                </span>
+              )}
+              {gameState.teamSpiritActive && (
+                <span className="border border-amber-300 bg-amber-400 px-1.5 py-0.5 text-[9px] text-slate-950">
+                  BUFF TABIB +15% DMG
+                </span>
+              )}
+              {gameState.knightWardActive && (
+                <span className="border border-sky-300 bg-sky-400 px-1.5 py-0.5 text-[9px] text-slate-950">
+                  WARD KSATRIA -25% DMG
+                </span>
+              )}
+            </div>
             {gameState.bossTraitName && (
               <span className="text-amber-300">TRAIT BOSS: {gameState.bossTraitName}</span>
             )}
